@@ -8,6 +8,7 @@ const pool = new Pool({
 });
 
 let channel;
+
 // Connect to RabbitMQ and consume messages
 export async function connectRabbit() {
   const connection = await amqp.connect("amqp://admin:admin@localhost");
@@ -21,6 +22,7 @@ export function getChannel() {
   return channel;
 }
 
+// Consume messages from RabbitMQ
 async function consumeMessages() {
   await pool.connect();
   let channel = await connectRabbit();
@@ -32,24 +34,20 @@ async function consumeMessages() {
     if (data.event === "link_visited") {
       try {
         await pool.query(
-          `INSERT INTO url_counts 
-          (original_url, short_code, visit_count, last_visited)VALUES 
-          ($1, $2, 1, $3) ON CONFLICT (short_code) DO UPDATE SET
-          visit_count = url_counts.visit_count + 1,
-          last_visited = EXCLUDED.last_visited;
-        `,
-          [data.original_url, data.shortCode, data.timestamp]
+          `INSERT INTO url_metadata (original_url, short_code, ip) VALUES
+            ($1, $2, $3) ON CONFLICT (short_code) DO UPDATE SET
+            ip = EXCLUDED.ip;`,
+          [data.original_url, data.shortCode, data.ip]
         );
-
         console.log(`Updated visit count for ${data.shortCode}`);
       } catch (err) {
-        console.error("Error updating visit count:", err);
+        console.error("Error updating metadata:", err);
       }
     }
     channel.ack(msg);
   });
 }
 
-consumeMessages().catch((err) => {
+await consumeMessages().catch((err) => {
   console.error("Error consuming messages:", err);
 });
